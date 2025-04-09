@@ -4,9 +4,8 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
-#include <vector>
 
-std::time_t strToTime(std::string& date) {
+std::time_t strToTime(const std::string& date) {
     std::tm tm = {};
     std::stringstream ymd(date);
 
@@ -51,18 +50,16 @@ BitcoinExchange::BitcoinExchange(const std::string& filePath) : data() {
         }
 
         while (std::getline(dataFile, line)) {
-            std::vector<std::string> row;
             std::stringstream ss(line);
-            std::string cell;
+            std::string date, value;
 
-            while (std::getline(ss, cell, ',')) {
-                row.push_back(cell);
-            }
-            if (row.size() != 2) {
+            if (!std::getline(ss, date, ',') || !std::getline(ss, value)) {
                 throw std::runtime_error("not a valid format => " + line);
             }
-            std::string date = row[0];
-            std::string value = row[1];
+            std::string extra;
+            if (std::getline(ss, extra)) {
+                throw std::runtime_error("not a valid format => " + line);
+            }
 
             auto timePoint = strToTime(date);
             auto floatValue = safeToFloat(value);
@@ -85,13 +82,11 @@ BitcoinExchange& ::BitcoinExchange::operator=(const BitcoinExchange & other) {
     return *this;
 }
 
-void BitcoinExchange::processInputRow(
-    const std::vector<std::string>& row) const {
+void BitcoinExchange::processInputRow(const std::string& date,
+                                      const std::string& delim,
+                                      const std::string& valueString) const {
     std::time_t tp;
     float value;
-    std::string date = row[0];
-    std::string delim = row[1];
-    std::string valueString = row[2];
 
     if (delim != "|") {
         std::cerr << "Error: not a valid delimiter => " << delim << std::endl;
@@ -145,19 +140,21 @@ void BitcoinExchange::calculateRates(const std::string& filePath) const {
             throw std::runtime_error("not a valid input header => " + line);
         }
         while (std::getline(inputFile, line)) {
-            std::vector<std::string> row;
             std::stringstream ss(line);
-            std::string cell;
+            std::string date, delim, valueString;
 
-            while (std::getline(ss, cell, ' ')) {
-                row.push_back(cell);
+            if (!std::getline(ss, date, ' ') || !std::getline(ss, delim, ' ') ||
+                !std::getline(ss, valueString)) {
+                throw std::runtime_error("not a valid format => " + line);
             }
-            if (row.size() != 3) {
+
+            std::string extra;
+            if (std::getline(ss, extra)) {
                 std::cerr << "Error: not a valid format => " << line
                           << std::endl;
                 continue;
             }
-            processInputRow(row);
+            processInputRow(date, delim, valueString);
         }
         inputFile.close();
     } catch (...) {
