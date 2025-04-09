@@ -15,18 +15,17 @@ class PmergeMe {
     PmergeMe& operator=(const PmergeMe& other);
 
     void sort();
+    void validate() const;
 
    private:
-    Container stragglers;
     Container mainChain;
+    Container pend;
     std::vector<std::pair<Container, Container>> pairs;
+    Container stragglers;
+
     std::chrono::time_point<Clock> startTime;
 
-    void createInitialPairs(const Container& input);
-    void displayResult();
-    void printPairs() const;
-    void mergePairs();
-    void printList(const Container& list) const;
+    void fordJohnsonSort(const Container& input);
     void printResult() const;
     Container generateJacobsthalSequence(std::size_t maxSize) const;
     void binaryInsert(int elementToInsert);

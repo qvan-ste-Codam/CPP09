@@ -53,7 +53,7 @@ BitcoinExchange::BitcoinExchange(const std::string& filePath) : data() {
             std::stringstream ss(line);
             std::string date, value;
 
-            if (!std::getline(ss, date, ',') || !std::getline(ss, value)) {
+            if ((line.find(" ") != std::string::npos) || !std::getline(ss, date, ',') || !std::getline(ss, value)) {
                 throw std::runtime_error("not a valid format => " + line);
             }
             std::string extra;
@@ -83,15 +83,10 @@ BitcoinExchange& ::BitcoinExchange::operator=(const BitcoinExchange & other) {
 }
 
 void BitcoinExchange::processInputRow(const std::string& date,
-                                      const std::string& delim,
                                       const std::string& valueString) const {
     std::time_t tp;
     float value;
 
-    if (delim != "|") {
-        std::cerr << "Error: not a valid delimiter => " << delim << std::endl;
-        return;
-    }
     try {
         tp = strToTime(date);
         value = safeToFloat(valueString);
@@ -143,9 +138,20 @@ void BitcoinExchange::calculateRates(const std::string& filePath) const {
             std::stringstream ss(line);
             std::string date, delim, valueString;
 
+            if (line.empty()) {
+                continue;
+            }
+
+            // Line has subsequent spaces
+            if (line.find("  ") != std::string::npos) {
+                std::cerr << "Error: not a valid format => "
+                          << line << std::endl;
+                continue;
+            }
             if (!std::getline(ss, date, ' ') || !std::getline(ss, delim, ' ') ||
                 !std::getline(ss, valueString)) {
-                throw std::runtime_error("not a valid format => " + line);
+                std::cerr << "Error: not a valid format => " << line
+                          << std::endl;
             }
 
             std::string extra;
@@ -154,7 +160,12 @@ void BitcoinExchange::calculateRates(const std::string& filePath) const {
                           << std::endl;
                 continue;
             }
-            processInputRow(date, delim, valueString);
+            if (delim != "|") {
+                std::cerr << "Error: not a valid delimiter => " << delim
+                          << std::endl;
+                continue;
+            }
+            processInputRow(date, valueString);
         }
         inputFile.close();
     } catch (...) {

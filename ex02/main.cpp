@@ -11,9 +11,11 @@ int main(int argc, char *argv[]) {
     try {
         PmergeMe<std::deque<int>> dequeSort(argv + 1);
         dequeSort.sort();
+        dequeSort.validate();
 
         PmergeMe<std::vector<int>> vectorSort(argv + 1);
         vectorSort.sort();
+        vectorSort.validate();
     } catch (const std::runtime_error &e) {
         std::cerr << "Error: " << e.what() << std::endl;
         exit(1);

@@ -15,6 +15,6 @@ class BitcoinExchange {
    private:
     std::map<std::time_t, float> data;
 
-    void processInputRow(const std::string &date, const std::string &delim,
-                        const std::string &valueString) const;
+    void processInputRow(const std::string &date,
+                         const std::string &valueString) const;
 };

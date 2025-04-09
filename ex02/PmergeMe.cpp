@@ -12,7 +12,21 @@ template class PmergeMe<std::deque<int>>;
 
 template <typename Container>
 PmergeMe<Container>::PmergeMe(const PmergeMe& other)
-    : stragglers(other.stragglers), pairs(other.pairs) {}
+    : mainChain(other.mainChain),
+      pend(other.pend),
+      stragglers(other.stragglers),
+      startTime(other.startTime) {}
+
+template <typename Container>
+PmergeMe<Container>& PmergeMe<Container>::operator=(const PmergeMe& other) {
+    if (this != &other) {
+        mainChain = other.mainChain;
+        pend = other.pend;
+        stragglers = other.stragglers;
+        startTime = other.startTime;
+    }
+    return *this;
+}
 
 int safeStoi(const std::string& input) {
     try {
@@ -33,7 +47,13 @@ PmergeMe<Container>::PmergeMe(char** argv) {
     Container input;
     while (*argv) {
         std::string item(*argv);
-        input.push_back(safeStoi(item));
+        int in = safeStoi(item);
+        // The subject requires numbers to be positive. As far as I can tell,
+        // the code still works with negative numbers
+        if (in < 0) {
+            throw std::runtime_error("number is negative => " + item);
+        }
+        input.push_back(in);
         argv++;
     }
     if (input.size() == 1) {
@@ -45,80 +65,57 @@ PmergeMe<Container>::PmergeMe(char** argv) {
         std::cout << i << " ";
     }
     std::cout << std::endl;
-
     startTime = std::chrono::system_clock::now();
-    createInitialPairs(input);
+    fordJohnsonSort(input);
 }
 
 template <typename Container>
-void PmergeMe<Container>::createInitialPairs(const Container& input) {
-    auto it = input.begin();
-    bool hasStraggler = (input.size() % 2 != 0);
-
-    while (it != input.end() && std::next(it) != input.end()) {
-        int first = *it++;
-        int second = *it++;
-
-        Container larger, smaller;
-        if (first > second) {
-            larger.push_back(first);
-            smaller.push_back(second);
-        } else {
-            larger.push_back(second);
-            smaller.push_back(first);
-        }
-
-        pairs.push_back(std::make_pair(smaller, larger));
-    }
-
-    if (hasStraggler && it != input.end()) {
-        stragglers.push_back(*it);
-    }
-
-    // std::cout << "Initial pairs: ";
-    // printPairs();
-    // std::cout << std::endl;
-}
-
-template <typename Container>
-void PmergeMe<Container>::mergePairs() {
-    if (pairs.size() <= 1) {
+void PmergeMe<Container>::fordJohnsonSort(const Container& input) {
+    if (input.size() <= 1) {
+        mainChain = input;
         return;
     }
-    std::vector<std::pair<Container, Container>> newPairs;
 
-    for (auto& pair : pairs) {
-        auto& [left, right] = pair;
+    Container inputCopy = input;
+    if (input.size() % 2 != 0) {
+        stragglers.push_back(inputCopy.back());
+        inputCopy.pop_back();
+    }
 
-        if (!left.empty() && !right.empty() && left.back() > right.back()) {
-            std::swap(left, right);
+    std::vector<std::pair<int, int>> pairs;
+    auto it = inputCopy.begin();
+    while (it != inputCopy.end()) {
+        int first = *it++;
+        int second = *it++;
+        if (first > second) {
+            pairs.push_back(std::make_pair(first, second));
+        } else {
+            pairs.push_back(std::make_pair(second, first));
         }
     }
 
-    auto it = pairs.begin();
-    while (it != pairs.end()) {
-        auto [left1, left2] = *it++;
-
-        if (it == pairs.end()) {
-            stragglers.insert(stragglers.end(), left1.begin(), left1.end());
-            stragglers.insert(stragglers.end(), left2.begin(), left2.end());
-            break;
-        }
-        auto [right1, right2] = *it++;
-
-        Container newLeft;
-        Container newRight;
-        newLeft.insert(newLeft.end(), left1.begin(), left1.end());
-        newLeft.insert(newLeft.end(), left2.begin(), left2.end());
-        newRight.insert(newRight.end(), right1.begin(), right1.end());
-        newRight.insert(newRight.end(), right2.begin(), right2.end());
-        newPairs.push_back(std::make_pair(newLeft, newRight));
+    Container largerElements;
+    for (const auto& pair : pairs) {
+        largerElements.push_back(pair.first);
     }
-    pairs = newPairs;
-    // std::cout << "After merge: ";
-    // printPairs();
-    // std::cout << std::endl;
-    mergePairs();
+
+    if (largerElements.size() > 1) {
+        PmergeMe<Container> sorter;
+        sorter.fordJohnsonSort(largerElements);
+        mainChain = sorter.mainChain;
+
+        for (int straggler : sorter.stragglers) {
+            stragglers.push_back(straggler);
+        }
+        for (int pendElement : sorter.pend) {
+            pend.push_back(pendElement);
+        }
+    } else {
+        mainChain = largerElements;
+    }
+    for (const auto& pair : pairs) {
+        pend.push_back(pair.second);
+    }
 }
 
 template <typename Container>
@@ -166,15 +163,15 @@ Container PmergeMe<Container>::calculateInsertionOrder(
 
     for (size_t i = 2;
          i < jacobsthal.size() && jacobsthal[i] <= static_cast<int>(pendSize);
-         ++i) {
-        for (int j = jacobsthal[i] - 1; j > jacobsthal[i - 1]; --j) {
+         i++) {
+        for (int j = jacobsthal[i] - 1; j > jacobsthal[i - 1]; j--) {
             if (j < static_cast<int>(pendSize)) {
                 insertIndices.push_back(j);
             }
         }
     }
 
-    for (size_t i = 0; i < pendSize; ++i) {
+    for (size_t i = 0; i < pendSize; i++) {
         if (std::find(insertIndices.begin(), insertIndices.end(), i) ==
             insertIndices.end()) {
             insertIndices.push_back(i);
@@ -186,32 +183,6 @@ Container PmergeMe<Container>::calculateInsertionOrder(
 
 template <typename Container>
 void PmergeMe<Container>::sort() {
-    mergePairs();
-
-    if (pairs.empty()) {
-        return;
-    }
-    Container pend;
-
-    for (auto& pair : pairs) {
-        auto& [smaller, larger] = pair;
-
-        for (int large : larger) {
-            auto pos = mainChain.begin();
-            while (pos != mainChain.end() && *pos < large) {
-                ++pos;
-            }
-            mainChain.insert(pos, large);
-        }
-        for (int small : smaller) {
-            pend.push_back(small);
-        }
-    }
-
-    for (int straggler : stragglers) {
-        pend.push_back(straggler);
-    }
-
     Container jacobsthal = generateJacobsthalSequence(pend.size());
     Container insertIndices = calculateInsertionOrder(jacobsthal, pend.size());
 
@@ -219,8 +190,11 @@ void PmergeMe<Container>::sort() {
         auto it = pend.begin();
         std::advance(it, idx);
         int elementToInsert = *it;
-
         binaryInsert(elementToInsert);
+    }
+
+    for (int straggler : stragglers) {
+        binaryInsert(straggler);
     }
     printResult();
 }
@@ -253,43 +227,18 @@ void PmergeMe<Container>::printResult() const {
 }
 
 template <typename Container>
-void PmergeMe<Container>::printList(const Container& list) const {
-    std::cout << '[';
-    bool first = true;
-    for (auto i : list) {
-        if (!first) {
-            std::cout << ',';
-        }
-        std::cout << i;
-        first = false;
+void PmergeMe<Container>::validate() const {
+    if (mainChain.empty()) {
+        throw std::runtime_error("container is empty");
     }
-    std::cout << ']';
-}
 
-template <typename Container>
-void PmergeMe<Container>::printPairs() const {
-    bool first = true;
-    for (auto& pair : pairs) {
-        const auto& [left, right] = pair;
-        if (!first) {
-            std::cout << ' ';
-        }
+    bool isSorted = std::is_sorted(mainChain.begin(), mainChain.end());
 
-        std::cout << '[';
-        if (left.size() == 1) {
-            std::cout << left.front();
-        } else {
-            printList(left);
-        }
-
-        std::cout << ',';
-
-        if (right.size() == 1) {
-            std::cout << right.front();
-        } else {
-            printList(right);
-        }
-        std::cout << ']';
-        first = false;
+    if (isSorted) {
+        std::cout << "Validation successful: Container is properly sorted."
+                  << std::endl;
+    } else {
+        std::cout << "Validation failed: Container is not properly sorted!"
+                  << std::endl;
     }
-}
+};
